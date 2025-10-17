@@ -2,9 +2,8 @@
 handwritingNav2/data/diffusion_dataset/
 handwritingNav2/data/models/
 
-# 排除大型场景数据
-data/scene_datasets/
-data/mp3d_hwnav/
+# 排除根目录下的整个 data 文件夹
+data/
 
 # Python
 __pycache__/
