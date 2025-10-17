@@ -1,0 +1,63 @@
+# Minimal config for run_agent_depth.py debugging
+ENVIRONMENT:
+  MAX_EPISODE_STEPS: 5000
+  ITERATOR_OPTIONS:
+    SHUFFLE: True
+
+SIMULATOR:
+  HABITAT_SIM_V0:
+    GPU_DEVICE_ID: 3
+  RGB_SENSOR:
+    WIDTH: 640
+    HEIGHT: 480
+    HFOV: 79
+    POSITION: [0, 0.88, 0]
+  DEPTH_SENSOR:
+    WIDTH: 640
+    HEIGHT: 480
+    HFOV: 79
+    NORMALIZE_DEPTH: False
+    MIN_DEPTH: 0.5
+    MAX_DEPTH: 5.0
+    POSITION: [0, 0.88, 0]
+  HABITAT_SIM_V0:
+    ENABLE_PHYSICS: False
+    GPU_DEVICE_ID: 5
+    ALLOW_SLIDING: True
+  AGENT_0:
+    HEIGHT: 0.88
+
+
+TASK:
+  TYPE: Nav-v0
+  SENSORS: ['POINTGOAL_SENSOR', 'COMPASS_SENSOR', 'GPS_SENSOR']
+  POINTGOAL_SENSOR:
+    TYPE: PointGoalSensor
+    GOAL_FORMAT: CARTESIAN
+    NOISE_SIGMA: 0.0
+  GPS_SENSOR:
+    TYPE: GPSSensor
+    DIMENSIONALITY: 2
+  COMPASS_SENSOR:
+    TYPE: CompassSensor
+    
+  MEASUREMENTS: ['DISTANCE_TO_GOAL', 'SUCCESS', 'SPL', 'TOP_DOWN_MAP']
+  DISTANCE_TO_GOAL:
+    TYPE: DistanceToGoal
+  SUCCESS:
+    TYPE: Success
+    SUCCESS_DISTANCE: 3.0
+  SPL:
+    TYPE: SPL
+  TOP_DOWN_MAP:
+    TYPE: TopDownMap
+  REWARD_MEASURE: DISTANCE_TO_GOAL
+  SLACK_REWARD: -0.01
+  END_SUCCESS_REWARD: 10.0
+  POSSIBLE_ACTIONS: [STOP, MOVE_FORWARD, TURN_LEFT, TURN_RIGHT]
+
+DATASET:
+  TYPE: PointNav-v1
+  SPLIT: train
+  DATA_PATH: "/data/xhj/handwritingNav/data/mp3d_hwnav/{split}/train_debug.json"
+  SCENES_DIR: "data/scene_datasets/"

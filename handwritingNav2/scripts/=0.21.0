@@ -1,0 +1,33 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting diffusers
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/2a/2e/38d9824f8c6bb048c5ba21c6d4da54c29c162a46b58b3ef907a360a76d3e/diffusers-0.35.2-py3-none-any.whl (4.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.1/4.1 MB 9.9 MB/s eta 0:00:00
+Requirement already satisfied: importlib_metadata in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (8.5.0)
+Requirement already satisfied: filelock in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (3.16.1)
+Collecting huggingface-hub>=0.34.0 (from diffusers)
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/31/a0/651f93d154cb72323358bf2bbae3e642bdb5d2f1bfc874d096f7cb159fa0/huggingface_hub-0.35.3-py3-none-any.whl (564 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 564.3/564.3 kB 9.3 MB/s eta 0:00:00
+Requirement already satisfied: numpy in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (1.23.5)
+Requirement already satisfied: regex!=2019.12.17 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (2024.11.6)
+Requirement already satisfied: requests in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (2.32.3)
+Requirement already satisfied: safetensors>=0.3.1 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (0.4.5)
+Requirement already satisfied: Pillow in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from diffusers) (10.2.0)
+Requirement already satisfied: fsspec>=2023.5.0 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from huggingface-hub>=0.34.0->diffusers) (2024.12.0)
+Requirement already satisfied: packaging>=20.9 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from huggingface-hub>=0.34.0->diffusers) (24.2)
+Requirement already satisfied: pyyaml>=5.1 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from huggingface-hub>=0.34.0->diffusers) (6.0.2)
+Requirement already satisfied: tqdm>=4.42.1 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from huggingface-hub>=0.34.0->diffusers) (4.67.1)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from huggingface-hub>=0.34.0->diffusers) (4.13.0)
+Collecting hf-xet<2.0.0,>=1.1.3 (from huggingface-hub>=0.34.0->diffusers)
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/15/07/86397573efefff941e100367bbda0b21496ffcdb34db7ab51912994c32a2/hf_xet-1.1.10-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 8.8 MB/s eta 0:00:00
+Requirement already satisfied: zipp>=3.20 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from importlib_metadata->diffusers) (3.20.2)
+Requirement already satisfied: charset-normalizer<4,>=2 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from requests->diffusers) (3.4.0)
+Requirement already satisfied: idna<4,>=2.5 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from requests->diffusers) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from requests->diffusers) (2.2.3)
+Requirement already satisfied: certifi>=2017.4.17 in /root/miniconda3/envs/habitat-env/lib/python3.8/site-packages (from requests->diffusers) (2024.12.14)
+Installing collected packages: hf-xet, huggingface-hub, diffusers
+  Attempting uninstall: huggingface-hub
+    Found existing installation: huggingface-hub 0.27.0
+    Uninstalling huggingface-hub-0.27.0:
+      Successfully uninstalled huggingface-hub-0.27.0
+Successfully installed diffusers-0.35.2 hf-xet-1.1.10 huggingface-hub-0.35.3

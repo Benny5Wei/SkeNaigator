@@ -1,0 +1,70 @@
+BASE_TASK_CONFIG_PATH: "modeling/config/hwnav_base.yaml"
+
+# GPU 配置
+GPU_IDS: "0,1,2,3"  # 指定要使用的GPU ID（逗号分隔），注释掉则使用所有可用GPU
+# NUM_GPUS: 4  # 或者指定使用前N个GPU
+
+# 扩散策略离线训练配置
+# 扩散策略使用离线数据集，不需要多进程环境
+NUM_PROCESSES: 1  # 离线训练不需要多进程
+SENSORS: ["DEPTH_SENSOR", 'RGB_SENSOR']
+NUM_UPDATES: 100000  # 训练更新次数
+LOG_INTERVAL: 10
+CHECKPOINT_INTERVAL: 500
+VIDEO_OPTION: []
+VISUALIZATION_OPTION: []
+
+# 使用扩散策略
+TRAINER_NAME: "HabitatDiffusionTrainer"
+USE_DIFFUSION_POLICY: True
+
+# 离线训练不需要向量环境
+USE_VECENV: False
+USE_SYNC_VECENV: False
+
+# 数据集路径
+DIFFUSION_DATA_DIR: "/data/ww/skenav2/handwritingNav2/data/diffusion_dataset"
+
+# 传感器配置
+EXTRA_RGB: False  # 不使用RGB传感器（节省存储和加载时间）
+EXTRA_DEPTH: True  # 只使用深度传感器
+SLAM: False  # 是否使用SLAM
+USE_VAE: False  # 是否使用VAE模型
+
+USE_POINTNAV: False  # 是否使用PointNav传感器辅助导航
+PREDICT_GOAL: True  # 启用目标预测
+USE_EXPERT_ACTIONS: False  # 扩散策略通常不需要专家动作
+
+# 扩散策略配置
+RL:
+  DIFFUSION:
+    # 扩散模型参数
+    horizon: 16  # 动作序列长度
+    n_action_steps: 4  # 实际执行的动作步数
+    n_obs_steps: 3  # 观察步数
+    obs_dim: 512  # 观察特征维度
+    action_dim: 4  # 动作维度 (前进、左转、右转、停止)
+    num_inference_steps: 20  # 推理步数
+    obs_as_global_cond: True  # 使用全局条件
+    hidden_size: 512  # 隐藏层大小
+    
+    # 训练参数
+    batch_size: 32  # 批次大小
+    num_workers: 0  # 数据加载线程数（DDP时建议设为0或1，避免SIGBUS错误）
+    lr: 1e-4  # 学习率
+    weight_decay: 1e-4  # 权重衰减
+    use_linear_lr_decay: True  # 使用线性学习率衰减
+    
+    # 噪声调度器参数
+    num_train_timesteps: 1000  # 训练时间步数
+    beta_start: 0.0001  # 噪声调度器起始beta
+    beta_end: 0.02  # 噪声调度器结束beta
+    beta_schedule: "linear"  # 噪声调度器类型
+    prediction_type: "epsilon"  # 预测类型
+    
+    # UNet架构参数
+    down_dims: [256, 512, 1024]  # 下采样维度
+    diffusion_step_embed_dim: 256  # 扩散步嵌入维度
+    down_step_sizes: [1, 1, 1]  # 下采样步长
+    kernel_size: 5  # 卷积核大小
+    n_groups: 8  # 组归一化组数

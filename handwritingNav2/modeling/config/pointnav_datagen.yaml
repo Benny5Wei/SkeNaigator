@@ -1,0 +1,78 @@
+# PointNav配置 - 用于数据生成
+
+ENVIRONMENT:
+  MAX_EPISODE_STEPS: 500
+  ITERATOR_OPTIONS:
+    SHUFFLE: True
+
+SIMULATOR:
+  TYPE: "Sim-v0"
+  HABITAT_SIM_V0:
+    GPU_DEVICE_ID: 0
+    ENABLE_PHYSICS: False
+    ALLOW_SLIDING: True
+  RGB_SENSOR:
+    WIDTH: 256
+    HEIGHT: 256
+    HFOV: 79
+    POSITION: [0, 0.88, 0]
+  DEPTH_SENSOR:
+    WIDTH: 256
+    HEIGHT: 256
+    HFOV: 79
+    NORMALIZE_DEPTH: False
+    MIN_DEPTH: 0.5
+    MAX_DEPTH: 5.0
+    POSITION: [0, 0.88, 0]
+  AGENT_0:
+    HEIGHT: 0.88
+    SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR"]
+  ACTION_SPACE_CONFIG: "v0"
+  SCENE_DATASET: "mp3d"
+  GRID_SIZE: 1.0
+
+TASK:
+  TYPE: Nav-v0
+  SENSORS: ['POINTGOAL_SENSOR', 'COMPASS_SENSOR', 'GPS_SENSOR']
+  POINTGOAL_SENSOR:
+    TYPE: PointGoalSensor
+    GOAL_FORMAT: CARTESIAN
+    NOISE_SIGMA: 0.0
+  GPS_SENSOR:
+    TYPE: GPSSensor
+    DIMENSIONALITY: 2
+  COMPASS_SENSOR:
+    TYPE: CompassSensor
+  MEASUREMENTS: ['DISTANCE_TO_GOAL', 'SUCCESS', 'SPL', 'SOFT_SPL', 'TOP_DOWN_MAP']
+  DISTANCE_TO_GOAL:
+    TYPE: DistanceToGoal
+  SUCCESS:
+    TYPE: Success
+    SUCCESS_DISTANCE: 0.5  # 与goal_radius匹配，确保成功率合理
+  SPL:
+    TYPE: SPL
+  SOFT_SPL:
+    TYPE: SoftSPL
+  TOP_DOWN_MAP:
+    TYPE: TopDownMap
+    MAP_RESOLUTION: 500
+    DRAW_SOURCE_AND_TARGET: True
+    DRAW_BORDER: True
+    DRAW_SHORTEST_PATH: True
+  REWARD_MEASURE: DISTANCE_TO_GOAL
+  SLACK_REWARD: -0.01
+  END_SUCCESS_REWARD: 10.0
+  POSSIBLE_ACTIONS: [STOP, MOVE_FORWARD, TURN_LEFT, TURN_RIGHT]
+
+DATASET:
+  TYPE: PointNav-v1
+  SPLIT: train
+  DATA_PATH: "/mnt_data/skenav2/data/big_train_1.json.gz"
+  SCENES_DIR: "/mnt_data/skenav2/data/scene_datasets"
+  CONTENT_SCENES: ["*"]
+
+# 数据生成配置
+DATA_GENERATION:
+  MAX_EPISODES: 2000  # 限制处理的episode数量，设为-1则处理全部
+  SPLIT_RATIO: 0.9    # 训练集/测试集划分比例
+

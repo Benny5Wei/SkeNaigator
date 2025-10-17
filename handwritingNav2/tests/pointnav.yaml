@@ -1,0 +1,52 @@
+habitat:
+  environment:
+    max_episode_steps: 5000
+    iterator_options:
+      shuffle: True  # 如果你不想随机顺序遍历 episodes
+  simulator:
+    type: HabitatSim
+    agents:
+      main_agent:
+        height: 1.5
+        radius: 0.1
+        sensors:
+          rgb_sensor:
+            type: HabitatSimRGBSensor
+            position: [0.0, 1.5, 0.0]
+            resolution: [256, 256]
+            hfov: 90
+            uuid: rgb
+    habitat_sim_v0:
+      allow_sliding: True
+      enable_physics: False
+      gpu_device_id: 0
+      scene: "data/scene_datasets/mp3d/ur6pFq6Qu1A/ur6pFq6Qu1A.glb"  # <-- 这是默认的初始化场景
+
+  task:
+    type: Nav-v0
+    measurements:
+      distance_to_goal:
+        type: DistanceToGoal
+      success:
+        type: Success
+      spl:
+        type: SPL
+    success:
+      success_distance: 3
+    reward_measure: distance_to_goal
+    slack_reward: -0.01
+    end_success_reward: 10.0
+    sensors:
+      pointgoal_sensor:
+        type: PointGoalSensor
+        goal_format: CARTESIAN
+        noise_sigma: 0.0
+    possible_actions: ["STOP", "MOVE_FORWARD", "TURN_LEFT", "TURN_RIGHT"]
+
+  dataset:
+    type: PointNav-v1
+    split: train
+    data_path: "/data/xhj/handwritingNav/data/mp3d_hwnav/{split}/train_debug.json"
+    scenes_dir: "data/scene_datasets/mp3d/"
+
+

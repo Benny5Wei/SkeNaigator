@@ -1,0 +1,73 @@
+ENVIRONMENT:
+  MAX_EPISODE_STEPS: 500
+SIMULATOR:
+  TYPE: "Sim-v0"
+  HABITAT_SIM_V0:
+    GPU_DEVICE_ID: 0
+    # 使用 CUDA 或 EGL 渲染后端
+    # 如果 EGL 有问题，可以尝试设置环境变量 MAGNUM_DEVICE=0
+  RGB_SENSOR:
+    WIDTH: 640
+    HEIGHT: 480
+    HFOV: 79
+    POSITION: [0, 0.88, 0]
+  DEPTH_SENSOR:
+    WIDTH: 640
+    HEIGHT: 480
+    HFOV: 79
+    NORMALIZE_DEPTH: False
+    MIN_DEPTH: 0.5
+    MAX_DEPTH: 5.0
+    POSITION: [0, 0.88, 0]
+
+
+  ACTION_SPACE_CONFIG: "v0"
+  SCENE_DATASET: "mp3d"
+  GRID_SIZE: 1.0
+
+  AGENT_0:
+    HEIGHT: 0.88
+
+TASK:
+  TYPE: HandWritingNav
+  SUCCESS_DISTANCE: 3.0
+
+  SENSORS: ['HANDWRITINGGOAL_SENSOR', 'HANDWRITINGINSTR_SENSOR', 'POINTGOAL_SENSOR', 'COMPASS_SENSOR', 'GPS_SENSOR']
+  GOAL_SENSOR_UUID: handwriting_instr
+  POINTGOAL_SENSOR:
+    TYPE: PointGoalSensor
+    GOAL_FORMAT: POLAR
+    DIMENSIONALITY: 2
+  GPS_SENSOR:
+    TYPE: GPSSensor
+    DIMENSIONALITY: 2
+  COMPASS_SENSOR:
+    TYPE: CompassSensor
+
+  MEASUREMENTS: ['DISTANCE_TO_GOAL', 'SUCCESS', 'SPL', 'SOFT_SPL']
+  DISTANCE_TO_GOAL:
+    DISTANCE_TO: 'POINT'
+  SUCCESS:
+    SUCCESS_DISTANCE: 3.0
+  TOP_DOWN_MAP:
+    MAP_RESOLUTION: 500
+    DRAW_SOURCE_AND_TARGET: True
+    DRAW_BORDER: True
+    DRAW_SHORTEST_PATH: True
+
+DATASET:
+  TYPE: "HandWritingNav"
+  SPLIT: "train"
+  CONTENT_SCENES: ["*"]
+  VERSION: 'v1'
+  SCENES_DIR: "/data/ww/skenav2/data/scene_datasets"
+  DATA_PATH: "/data/ww/skenav2/data/big_train_1.json"
+  #DATA_PATH: "data/mp3d_hwnav/train_clipasso.json"
+  #DATA_PATH: "data/mp3d_hwnav/train_smooth.json"
+  #DATA_PATH: "data/mp3d_hwnav/val_seen_clipasso.json"
+  #DATA_PATH: "data/mp3d_hwnav/val_seen_smooth.json"
+  #DATA_PATH: "data/mp3d_hwnav/val_unseen_clipasso.json"
+  #DATA_PATH: "data/mp3d_hwnav/val_unseen_smooth.json"
+
+  
+#

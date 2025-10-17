@@ -1,0 +1,56 @@
+BASE_TASK_CONFIG_PATH: "modeling/config/hwnav_base.yaml"
+
+# 多GPU训练配置
+# NUM_PROCESSES 表示并行环境数量，建议设置为 GPU数量 * 每GPU进程数
+# 例如: 3个GPU，每个GPU 4个进程 = 12
+NUM_PROCESSES: 12  # 可以根据GPU内存调整 (建议: num_gpus * 4)
+SENSORS: ["DEPTH_SENSOR", 'RGB_SENSOR']
+NUM_UPDATES: 200000
+# NUM_UPDATES: 100
+LOG_INTERVAL: 10
+CHECKPOINT_INTERVAL: 500
+VIDEO_OPTION: []
+VISUALIZATION_OPTION: []
+
+# 使用向量环境支持多进程
+USE_VECENV: True
+# 同步向量环境（更稳定，推荐用于多GPU）
+USE_SYNC_VECENV: False
+
+# Dataset loading options for large datasets
+# TASK_CONFIG:
+#   DATASET:
+#     LAZY_LOADING: True        # Enable lazy loading for large datasets
+#     DATASET_CHUNK_SIZE: 100   # How many episodes to load initially
+
+EXTRA_RGB: True   # 是否使用额外的RGB传感器
+EXTRA_DEPTH: True  # 显式启用深度传感器
+SLAM: False  # 是否使用SLAM
+USE_VAE: False  # 是否使用VAE模型
+
+USE_POINTNAV: False  # 是否使用PointNav传感器辅助导航
+PREDICT_GOAL: False  # 启用目标预测
+USE_EXPERT_ACTIONS: True
+
+RL:
+  PPO:
+    # ppo params
+    clip_param: 0.1
+    ppo_epoch: 4
+    num_mini_batch: 1
+    value_loss_coef: 0.5
+    entropy_coef: 0.20
+    lr: 2.5e-4
+    goal_pred_lr: 2.5e-4
+    eps: 1e-5
+    max_grad_norm: 0.5
+    # decide the length of history that ppo encodes
+    num_steps: 150
+    hidden_size: 512
+    use_gae: True
+    gamma: 0.99
+    tau: 0.95
+    use_linear_clip_decay: True
+    use_linear_lr_decay: True
+    # window size for calculating the past rewards
+    reward_window_size: 50

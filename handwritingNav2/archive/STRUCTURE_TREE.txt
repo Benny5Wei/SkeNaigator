@@ -1,0 +1,150 @@
+HandWritingNav2 - 项目结构树
+=====================================
+
+handwritingNav2/
+│
+├── 📝 README.md                      # 项目主文档
+├── 📝 PROJECT_STRUCTURE.md           # 结构详细说明
+├── 📝 REORGANIZATION_SUMMARY.md      # 重组总结
+├── 📝 STRUCTURE_TREE.txt            # 本文件
+│
+├── ⚙️  requirements.txt              # Python依赖
+├── ⚙️  setup.py                      # 安装配置
+├── ⚙️  .gitignore                    # Git忽略规则
+│
+├── 📂 modeling/                      # 🔥 核心建模代码
+│   ├── __init__.py
+│   ├── common/                       # 通用工具
+│   │   ├── base_trainer.py          # 训练器基类
+│   │   ├── env_utils.py             # 环境工具
+│   │   └── ...
+│   ├── config/                       # 配置文件
+│   │   ├── default.py               # 默认配置
+│   │   ├── hwnav_base.yaml         # 基础配置
+│   │   ├── train_diffusion_hwnav.yaml  # 扩散策略配置
+│   │   └── train_hwnav.yaml        # PPO配置
+│   ├── diffusion_policy/            # 🌊 扩散策略
+│   │   ├── __init__.py
+│   │   ├── diffusion_nav_policy.py  # 主策略类
+│   │   ├── conditional_unet1d.py    # UNet网络
+│   │   ├── habitat_diffusion_trainer.py  # 训练器
+│   │   └── normalizer.py            # 数据归一化
+│   ├── models/                      # 🧠 神经网络
+│   │   ├── __init__.py
+│   │   ├── visual_cnn.py           # 视觉编码器
+│   │   ├── advanced_goal_predictor.py  # 目标预测
+│   │   └── rnn_state_encoder.py    # RNN编码器
+│   ├── ppo/                         # PPO算法
+│   │   ├── __init__.py
+│   │   ├── ppo_trainer.py
+│   │   └── policy.py
+│   └── utils/                       # 工具函数
+│       └── expert_actions_loader.py
+│
+├── 📂 scripts/                       # 🚀 可执行脚本
+│   ├── __init__.py
+│   ├── train.py                     # ⭐ 主训练脚本
+│   ├── quick_start.sh              # 快速启动脚本
+│   ├── debug_env.py                # 环境调试
+│   ├── download_mp.py              # 数据下载
+│   └── count.py                    # 统计工具
+│
+├── 📂 tests/                         # 🧪 测试文件
+│   ├── __init__.py
+│   ├── test_diffusion_policy.py
+│   ├── test_habitat_compatibility.py
+│   └── simple_test_diffusion.py
+│
+├── 📂 docs/                          # 📚 文档
+│   ├── DIFFUSION_POLICY.md          # 扩散策略详解
+│   └── SETUP.md                     # 安装指南
+│
+├── 📂 references/                    # 🔍 参考项目（只读）
+│   └── flodiff/                     # FloNa参考实现
+│       ├── README.md
+│       ├── model/
+│       ├── training/
+│       └── ...
+│
+├── 📂 habitat-lab/                   # 🎮 Habitat仿真器
+│   ├── habitat/
+│   │   ├── core/
+│   │   ├── tasks/
+│   │   │   └── nav/
+│   │   │       └── handwriting_nav_task.py  # 自定义任务
+│   │   └── datasets/
+│   │       └── handwriting_nav/             # 自定义数据集
+│   ├── habitat_baselines/
+│   └── ...
+│
+├── 📂 data/                          # 💾 数据目录（gitignore）
+│   ├── scene_datasets/              # 场景数据
+│   │   └── mp3d/
+│   ├── datasets/                    # Episode数据
+│   │   └── mp3d_hwnav/
+│   └── models/                      # 保存的模型
+│       └── outputs/
+│
+├── 📂 utils/                         # 🔧 项目级工具
+│   ├── filtre/
+│   └── utils_fmm/
+│
+└── 📂 flona_dataset/                 # 数据集相关
+
+
+关键文件说明
+=====================================
+
+📌 入口点:
+   scripts/train.py              - 主训练脚本
+
+📌 核心代码:
+   modeling/diffusion_policy/diffusion_nav_policy.py
+   modeling/diffusion_policy/habitat_diffusion_trainer.py
+
+📌 配置文件:
+   modeling/config/train_diffusion_hwnav.yaml  - 扩散策略
+   modeling/config/train_hwnav.yaml           - PPO
+
+📌 文档:
+   README.md                     - 项目概述
+   docs/SETUP.md                 - 安装指南
+   PROJECT_STRUCTURE.md          - 详细结构
+
+📌 测试:
+   tests/simple_test_diffusion.py  - 快速测试
+
+
+使用示例
+=====================================
+
+# 1. 训练模型
+python scripts/train.py --run-type train
+
+# 2. 评估模型  
+python scripts/train.py --run-type eval --model-dir outputs/exp1
+
+# 3. 运行测试
+python tests/simple_test_diffusion.py
+
+# 4. 快速启动
+bash scripts/quick_start.sh
+
+
+图例说明
+=====================================
+📂 目录
+📝 文档文件
+⚙️  配置文件
+🔥 核心代码
+🌊 扩散策略
+🧠 神经网络
+🚀 可执行文件
+🧪 测试文件
+📚 文档
+🔍 参考
+🎮 第三方库
+💾 数据
+🔧 工具
+⭐ 重要文件
+

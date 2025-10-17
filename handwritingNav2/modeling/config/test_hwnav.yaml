@@ -1,0 +1,39 @@
+BASE_TASK_CONFIG_PATH: "modeling/config/hwnav_base.yaml"
+LOG_FILE: "eval.log"  # 将日志输出到eval.log而不是默认的train.log
+NUM_PROCESSES: 1
+SENSORS: ["DEPTH_SENSOR", "RGB_SENSOR"]
+TEST_EPISODE_COUNT: 500
+VIDEO_OPTION: []  # 可以设为 ["disk", "tensorboard"] 来保存视频
+VIDEO_DIR: "video_dir"
+VISUALIZATION_OPTION: []  # 可以设为 ["top_down_map"] 来显示俯视图
+
+EVAL:
+  SPLIT: "test"  # 使用测试集划分
+  USE_CKPT_CONFIG: True  # 使用checkpoint的配置
+
+# 设置显示分辨率与原始训练分辨率相同，防止重新缩放
+# 这里还应该匹配下面SIMULATOR.DEPTH_SENSOR.WIDTH的值
+# 以确保模型输入维度一致，避免影响eval结果
+DISPLAY_RESOLUTION: 640
+
+# 传感器和特性配置 - 确保与训练模型时使用的配置相匹配
+# 这些设置会覆盖 hwnav_base.yaml 中的默认设置
+EXTRA_RGB: False  # 是否使用额外的RGB传感器
+EXTRA_DEPTH: True  # 显式启用深度传感器
+SLAM: False  # 是否使用SLAM
+USE_VAE: False  # 是否使用VAE模型
+USE_POINTNAV: True  # 是否使用PointNav传感器辅助导航
+PREDICT_GOAL: False
+# 是否在评估过程中让智能体沿着最短路径前进
+FOLLOW_SHORTEST_PATH: False
+
+# 手动指定传感器分辨率以匹配训练时的设置
+# SIMULATOR:
+#   DEPTH_SENSOR:
+#     WIDTH: 640  # 减小尺寸以匹配模型预期输入
+#     HEIGHT: 480
+#     HFOV: 79
+#     NORMALIZE_DEPTH: False
+#     MIN_DEPTH: 0.5
+#     MAX_DEPTH: 5.0
+#     POSITION: [0, 0.88, 0]
