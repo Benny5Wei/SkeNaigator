@@ -2,6 +2,10 @@
 handwritingNav2/data/diffusion_dataset/
 handwritingNav2/data/models/
 
+# 忽略嵌套的 git 仓库
+handwritingNav2/references/flodiff/
+handwritingNav2/.gitignore
+
 # 排除根目录下的整个 data 文件夹
 data/
 
