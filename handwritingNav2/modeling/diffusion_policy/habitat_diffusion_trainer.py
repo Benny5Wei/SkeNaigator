@@ -66,12 +66,25 @@ class HabitatDiffusionTrainer(BaseRLTrainer):
         # 创建动作空间
         action_space = spaces.Discrete(config.RL.DIFFUSION.action_dim)
         
+        # 获取目标预测器配置（如果有的话）
+        use_goal_predictor = getattr(config.RL.DIFFUSION, 'use_goal_predictor', True)
+        goal_predictor_k_rows = getattr(config.RL.DIFFUSION, 'goal_predictor_k_rows', 5)
+        goal_predictor_k_cols = getattr(config.RL.DIFFUSION, 'goal_predictor_k_cols', 5)
+        goal_predictor_n_rays = getattr(config.RL.DIFFUSION, 'goal_predictor_n_rays', 8)
+        
+        # 获取序列建模配置（新增）
+        context_size = getattr(config.RL.DIFFUSION, 'context_size', 5)
+        use_transformer_encoder = getattr(config.RL.DIFFUSION, 'use_transformer_encoder', True)
+        mha_num_attention_heads = getattr(config.RL.DIFFUSION, 'mha_num_attention_heads', 4)
+        mha_num_attention_layers = getattr(config.RL.DIFFUSION, 'mha_num_attention_layers', 2)
+        mha_ff_dim_factor = getattr(config.RL.DIFFUSION, 'mha_ff_dim_factor', 4)
+        
         self.policy = DiffusionNavPolicy(
             observation_space=observation_space,
             action_space=action_space,
             goal_sensor_uuid=self.config.TASK_CONFIG.TASK.GOAL_SENSOR_UUID if hasattr(self.config, 'TASK_CONFIG') else "pointgoal_with_gps_compass",
             hidden_size=config.RL.DIFFUSION.hidden_size,
-            horizon=config.RL.DIFFUSION.horizon,
+            horizon=config.RL.DIFFUSION.horizon,  # len_traj_pred可配置
             n_action_steps=config.RL.DIFFUSION.n_action_steps,
             n_obs_steps=config.RL.DIFFUSION.n_obs_steps,
             obs_dim=config.RL.DIFFUSION.obs_dim,
@@ -83,7 +96,18 @@ class HabitatDiffusionTrainer(BaseRLTrainer):
             use_vae=self.config.USE_VAE,
             use_pointnav=use_pointnav,
             predict_goal=predict_goal,
-            obs_as_global_cond=config.RL.DIFFUSION.obs_as_global_cond
+            obs_as_global_cond=config.RL.DIFFUSION.obs_as_global_cond,
+            # 目标预测器配置
+            use_goal_predictor=use_goal_predictor,
+            goal_predictor_k_rows=goal_predictor_k_rows,
+            goal_predictor_k_cols=goal_predictor_k_cols,
+            goal_predictor_n_rays=goal_predictor_n_rays,
+            # 序列建模增强配置（新增）
+            context_size=context_size,
+            use_transformer_encoder=use_transformer_encoder,
+            mha_num_attention_heads=mha_num_attention_heads,
+            mha_num_attention_layers=mha_num_attention_layers,
+            mha_ff_dim_factor=mha_ff_dim_factor
         )
         self.policy.to(self.device)
         

@@ -39,14 +39,27 @@ USE_EXPERT_ACTIONS: False  # 扩散策略通常不需要专家动作
 RL:
   DIFFUSION:
     # 扩散模型参数
-    horizon: 16  # 动作序列长度
+    horizon: 16  # 动作序列长度（len_traj_pred，可配置）
     n_action_steps: 4  # 实际执行的动作步数
-    n_obs_steps: 3  # 观察步数
+    n_obs_steps: 3  # 观察步数（已弃用，使用context_size）
     obs_dim: 512  # 观察特征维度
     action_dim: 4  # 动作维度 (前进、左转、右转、停止)
     num_inference_steps: 20  # 推理步数
     obs_as_global_cond: True  # 使用全局条件
     hidden_size: 512  # 隐藏层大小
+    
+    # 目标预测器配置
+    use_goal_predictor: True  # 是否使用高级目标预测器
+    goal_predictor_k_rows: 5  # 关键点网格行数
+    goal_predictor_k_cols: 5  # 关键点网格列数
+    goal_predictor_n_rays: 8  # 射线数量
+    
+    # 序列建模增强配置（新增）
+    context_size: 5  # 历史观察帧数（参考flodiff）
+    use_transformer_encoder: True  # 启用Transformer序列编码器
+    mha_num_attention_heads: 4  # 多头注意力头数
+    mha_num_attention_layers: 2  # Transformer层数
+    mha_ff_dim_factor: 4  # 前馈网络维度因子
     
     # 训练参数
     batch_size: 32  # 批次大小

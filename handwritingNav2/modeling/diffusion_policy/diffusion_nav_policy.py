@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import math
 from typing import Dict, Optional, Tuple
 from einops import rearrange, reduce
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
@@ -29,6 +30,44 @@ from .normalizer import LinearNormalizer
 from ..models.visual_cnn import VisualCNN
 from ..models.advanced_goal_predictor import AdvancedGoalPredictor
 from ..models.rnn_state_encoder import RNNStateEncoder
+
+# 导入必要的工具函数（延迟导入，在使用时再导入）
+# from ..models.advanced_goal_predictor import (
+#     extract_occupancy_grid,
+#     extract_sketch_occupancy_grid,
+#     extract_goal_coordinates,
+#     generate_explore_keypoints,
+#     ray_features_pytorch
+# )
+
+
+class PositionalEncoding(nn.Module):
+    """
+    位置编码模块 - 参考flodiff的设计
+    为序列中的每个位置添加可学习的位置信息
+    """
+    def __init__(self, d_model: int, max_seq_len: int = 10):
+        super().__init__()
+        
+        # 计算位置编码
+        pos_enc = torch.zeros(max_seq_len, d_model)
+        pos = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pos_enc[:, 0::2] = torch.sin(pos * div_term)
+        pos_enc[:, 1::2] = torch.cos(pos * div_term)
+        pos_enc = pos_enc.unsqueeze(0)  # [1, max_seq_len, d_model]
+        
+        # 注册为buffer，不作为参数训练
+        self.register_buffer('pos_enc', pos_enc)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: [batch_size, seq_len, d_model]
+        Returns:
+            x + positional encoding: [batch_size, seq_len, d_model]
+        """
+        return x + self.pos_enc[:, :x.size(1), :]
 
 
 class DiffusionNavPolicy(nn.Module):
@@ -43,9 +82,9 @@ class DiffusionNavPolicy(nn.Module):
         action_space,       # Habitat动作空间，通常是离散的4个动作
         goal_sensor_uuid: str,  # 目标传感器UUID，用于识别手绘地图
         hidden_size: int = 512,  # 隐藏层大小，用于特征编码
-        horizon: int = 16,  # 动作序列长度，扩散模型生成的动作序列长度
+        horizon: int = 16,  # 动作序列长度，扩散模型生成的动作序列长度（len_traj_pred）
         n_action_steps: int = 4,  # 实际执行的动作步数，从序列中取前N步执行
-        n_obs_steps: int = 3,  # 观察步数，用于序列建模的历史观察数量
+        n_obs_steps: int = 3,  # 观察步数，用于序列建模的历史观察数量（已弃用，使用context_size）
         obs_dim: int = 512,  # 观察特征维度，编码后的观察特征大小
         action_dim: int = 4,  # 动作维度 (前进、左转、右转、停止)
         num_inference_steps: int = 20,  # 扩散推理步数，去噪过程的步数
@@ -56,6 +95,16 @@ class DiffusionNavPolicy(nn.Module):
         use_pointnav: bool = True,  # 是否使用PointNav传感器
         predict_goal: bool = True,  # 是否启用目标预测
         obs_as_global_cond: bool = True,  # 是否使用全局条件（观察作为全局条件）
+        use_goal_predictor: bool = True,  # 是否使用高级目标预测器
+        goal_predictor_k_rows: int = 5,  # 目标预测器关键点网格行数
+        goal_predictor_k_cols: int = 5,  # 目标预测器关键点网格列数
+        goal_predictor_n_rays: int = 8,  # 目标预测器射线数量
+        # 序列建模增强参数（新增）
+        context_size: int = 5,  # 历史观察帧数，参考flodiff设计
+        use_transformer_encoder: bool = True,  # 是否使用Transformer编码器
+        mha_num_attention_heads: int = 4,  # 多头注意力头数
+        mha_num_attention_layers: int = 2,  # Transformer层数
+        mha_ff_dim_factor: int = 4,  # 前馈网络维度因子
         **kwargs  # 其他参数
     ):
         super().__init__()
@@ -63,13 +112,30 @@ class DiffusionNavPolicy(nn.Module):
         # 存储基本参数
         self.goal_sensor_uuid = goal_sensor_uuid  # 目标传感器标识符
         self.hidden_size = hidden_size  # 隐藏层维度
-        self.horizon = horizon  # 动作序列长度
+        self.horizon = horizon  # 动作序列长度（len_traj_pred）
         self.n_action_steps = n_action_steps  # 实际执行的动作步数
-        self.n_obs_steps = n_obs_steps  # 观察步数
+        self.n_obs_steps = max(n_obs_steps, context_size)  # 观察步数（兼容旧参数）
+        self.context_size = context_size  # 历史观察帧数
         self.obs_dim = obs_dim  # 观察特征维度
         self.action_dim = action_dim  # 动作维度
         self.obs_as_global_cond = obs_as_global_cond  # 是否使用全局条件
         self.predict_goal = predict_goal  # 是否启用目标预测
+        self.use_goal_predictor = use_goal_predictor  # 是否使用高级目标预测器
+        self.slam = slam  # 是否使用SLAM地图
+        self.extra_rgb = extra_rgb
+        self.extra_depth = extra_depth
+        
+        # 序列建模参数
+        self.use_transformer_encoder = use_transformer_encoder
+        self.mha_num_attention_heads = mha_num_attention_heads
+        self.mha_num_attention_layers = mha_num_attention_layers
+        self.mha_ff_dim_factor = mha_ff_dim_factor
+        
+        # 目标预测器参数
+        self.goal_predictor_k_rows = goal_predictor_k_rows
+        self.goal_predictor_k_cols = goal_predictor_k_cols
+        self.goal_predictor_n_rays = goal_predictor_n_rays
+        self.k_points = goal_predictor_k_rows * goal_predictor_k_cols  # 总关键点数
         
         # ==================== 视觉编码器模块 ====================
         # 手绘地图编码器：处理手绘地图输入，提取空间特征
@@ -104,9 +170,23 @@ class DiffusionNavPolicy(nn.Module):
         # ==================== 目标预测模块 ====================
         # 高级目标预测器：从手绘地图预测目标位置
         # 使用Transformer架构和射线特征进行空间推理
-        if self.predict_goal:
+        if self.predict_goal and self.use_goal_predictor:
             self.goal_predictor = AdvancedGoalPredictor(
-                k_points=25, in_dim=10  # 5x5关键点网格，8射线+2坐标特征
+                k_points=self.k_points,  # 关键点数量
+                in_dim=goal_predictor_n_rays + 2,  # 射线数+2坐标特征
+                d_model=128,  # Transformer隐藏层维度
+                nhead=4,  # 注意力头数
+                num_layers=2,  # Transformer层数
+                dropout=0.1,
+                use_half_precision=False
+            )
+            
+            # 目标特征投影层：将预测的目标位置投影到特征空间
+            self.goal_feature_proj = nn.Sequential(
+                nn.Linear(2, 64),  # 2D坐标 -> 64维
+                nn.ReLU(),
+                nn.Linear(64, 128),  # 64 -> 128维
+                nn.ReLU()
             )
         
         # ==================== 扩散模型模块 ====================
@@ -152,12 +232,63 @@ class DiffusionNavPolicy(nn.Module):
         self.normalizer = LinearNormalizer()
         
         # 特征融合网络：将多模态特征融合为统一表示
-        # 用于将不同传感器的特征映射到统一的观察空间
+        # 增强版融合网络，支持注意力机制和残差连接
+        # 参考flodiff的设计，使用更深的融合网络处理不确定性
+        fusion_input_dim = hidden_size * 4  # 预留空间给多个编码器
+        if self.predict_goal and self.use_goal_predictor:
+            fusion_input_dim += 128  # 加上目标特征维度
+        
         self.feature_fusion = nn.Sequential(
-            nn.Linear(hidden_size, obs_dim),  # 降维映射
-            nn.ReLU(),  # 非线性激活
+            nn.Linear(fusion_input_dim, obs_dim * 2),  # 扩展到2倍维度
+            nn.LayerNorm(obs_dim * 2),  # 层归一化提高稳定性
+            nn.ReLU(),
+            nn.Dropout(0.1),  # 防止过拟合
+            nn.Linear(obs_dim * 2, obs_dim),  # 降维到目标维度
+            nn.LayerNorm(obs_dim),
+            nn.ReLU(),
             nn.Linear(obs_dim, obs_dim)  # 最终特征维度
         )
+        
+        # 自适应特征权重：学习各模态的重要性
+        # 用于处理手绘地图的不确定性，动态调整各模态的贡献
+        num_modalities = 5  # map, rgb, depth, slam, goal
+        self.modality_attention = nn.Sequential(
+            nn.Linear(fusion_input_dim, num_modalities),
+            nn.Softmax(dim=-1)
+        )
+        
+        # ==================== 序列建模增强模块（新增）====================
+        # 参考flodiff设计，使用Transformer处理历史观察序列
+        if self.use_transformer_encoder:
+            # 位置编码：为序列中的每个位置添加位置信息
+            # max_seq_len = context_size + 1 (历史帧) + 1 (地图/目标)
+            self.positional_encoding = PositionalEncoding(
+                d_model=obs_dim,
+                max_seq_len=self.context_size + 2
+            )
+            
+            # Transformer编码器层
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=obs_dim,
+                nhead=mha_num_attention_heads,
+                dim_feedforward=mha_ff_dim_factor * obs_dim,
+                activation="gelu",  # 使用GELU激活函数（更平滑）
+                batch_first=True,
+                norm_first=True,  # 先归一化再注意力，提高稳定性
+                dropout=0.1
+            )
+            
+            # 完整的Transformer编码器
+            self.sequence_encoder = nn.TransformerEncoder(
+                encoder_layer, 
+                num_layers=mha_num_attention_layers
+            )
+            
+            print(f"✓ Transformer序列编码器已启用:")
+            print(f"  - 历史帧数: {self.context_size}")
+            print(f"  - 注意力头: {mha_num_attention_heads}")
+            print(f"  - Transformer层: {mha_num_attention_layers}")
+            print(f"  - 前馈维度: {mha_ff_dim_factor * obs_dim}")
         
         # 使用EfficientNet作为图像编码器（参考flona_vint模型）
         # 输入: [B, C, H, W]，输出: [B, obs_dim]
@@ -195,6 +326,12 @@ class DiffusionNavPolicy(nn.Module):
         
         self.num_inference_steps = num_inference_steps
         self.kwargs = kwargs
+        
+        print(f"\n✓ DiffusionNavPolicy初始化完成:")
+        print(f"  - 动作序列长度(horizon/len_traj_pred): {self.horizon}")
+        print(f"  - 历史观察帧数(context_size): {self.context_size}")
+        print(f"  - 观察特征维度: {self.obs_dim}")
+        print(f"  - Transformer序列编码: {'启用' if self.use_transformer_encoder else '禁用'}")
     
     def _replace_bn_with_gn(self, module: nn.Module, features_per_group: int = 16) -> nn.Module:
         """将BatchNorm替换为GroupNorm以提高训练稳定性"""
@@ -209,28 +346,20 @@ class DiffusionNavPolicy(nn.Module):
         
     def encode_observations(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        编码观察数据为特征向量 - 与Habitat环境兼容
+        改进的多模态特征编码和融合 - 支持序列建模
         
-        该方法将多模态观察数据（RGB、深度、手绘地图等）编码为统一的特征表示，
-        用于后续的扩散模型条件生成。
+        该方法将多模态观察数据编码为统一的特征表示。新增Transformer序列编码器
+        处理历史观察序列，并使用注意力机制动态调整各模态的贡献。
         
         Args:
-            observations: Habitat环境返回的观察字典，包含各种传感器数据
-                - 'rgb': RGB图像 [H, W, 3]
-                - 'depth': 深度图像 [H, W, 1] 
-                - 'handwriting_instr': 手绘地图 [H, W, 3]
-                - 'pointgoal': 目标位置 [2]
-                - 'gps': GPS坐标 [2]
-                - 'compass': 朝向角度 [1]
+            observations: Habitat环境返回的观察字典
+                如果启用序列建模，观察可以包含历史帧
         
         Returns:
             torch.Tensor: 编码后的观察特征 [batch_size, obs_dim]
         """
-        features = []
-        
         # 处理Habitat的观察格式
         if isinstance(observations, dict):
-            # 确保所有观察都是张量格式
             processed_obs = {}
             for key, value in observations.items():
                 if isinstance(value, np.ndarray):
@@ -242,68 +371,279 @@ class DiffusionNavPolicy(nn.Module):
         else:
             processed_obs = observations
         
-        # 编码手绘地图
+        # 获取批次大小和设备
+        if isinstance(processed_obs, dict) and processed_obs:
+            sample_value = next(iter(processed_obs.values()))
+            batch_size = sample_value.shape[0] if len(sample_value.shape) > 0 else 1
+            device = sample_value.device if isinstance(sample_value, torch.Tensor) else torch.device('cpu')
+        else:
+            batch_size = 1
+            device = torch.device('cpu')
+        
+        # 收集各模态特征 (保持固定顺序：map, rgb, depth, slam, goal)
+        modality_features = []
+        modality_masks = []  # 标记哪些模态可用
+        
+        # 1. 手绘地图特征
         if self.goal_sensor_uuid in processed_obs:
             map_features = self.map_encoder(processed_obs)
-            features.append(map_features)
+            modality_features.append(map_features)
+            modality_masks.append(1.0)
+        else:
+            modality_features.append(torch.zeros(batch_size, self.hidden_size, device=device))
+            modality_masks.append(0.0)
         
-        # 编码其他传感器数据
+        # 2. RGB特征
         if hasattr(self, 'visual_encoder') and 'rgb' in processed_obs:
             rgb_features = self.visual_encoder(processed_obs)
-            features.append(rgb_features)
-            
+            modality_features.append(rgb_features)
+            modality_masks.append(1.0)
+        else:
+            modality_features.append(torch.zeros(batch_size, self.hidden_size, device=device))
+            modality_masks.append(0.0)
+        
+        # 3. 深度特征
         if hasattr(self, 'depth_encoder') and 'depth' in processed_obs:
             depth_features = self.depth_encoder(processed_obs)
-            features.append(depth_features)
-            
+            modality_features.append(depth_features)
+            modality_masks.append(1.0)
+        else:
+            modality_features.append(torch.zeros(batch_size, self.hidden_size, device=device))
+            modality_masks.append(0.0)
+        
+        # 4. SLAM特征
         if hasattr(self, 'slam_encoder') and 'slam' in processed_obs:
             slam_features = self.slam_encoder(processed_obs)
-            features.append(slam_features)
-            
-        if hasattr(self, 'vae_encoder') and self.goal_sensor_uuid in processed_obs:
-            vae_features = self.vae_encoder(processed_obs)
-            features.append(vae_features)
+            modality_features.append(slam_features)
+            modality_masks.append(1.0)
+        else:
+            modality_features.append(torch.zeros(batch_size, self.hidden_size, device=device))
+            modality_masks.append(0.0)
         
-        # 目标预测
-        if self.predict_goal and 'slam' in processed_obs and self.goal_sensor_uuid in processed_obs:
-            goal_features = self._predict_goal_position(processed_obs)
-            features.append(goal_features)
-        elif hasattr(self, 'use_pointnav') and 'pointgoal' in processed_obs:
-            # 使用PointNav数据
+        # 5. 目标预测特征 (关键改进：使用AdvancedGoalPredictor)
+        goal_feat_dim = 128 if (self.predict_goal and self.use_goal_predictor) else 0
+        if self.predict_goal and self.use_goal_predictor:
+            # 检查是否有必要的输入
+            has_required_input = (
+                self.goal_sensor_uuid in processed_obs and
+                (self.slam or self.goal_sensor_uuid in processed_obs)
+            )
+            
+            if has_required_input:
+                try:
+                    # 使用改进的目标预测器
+                    pred_xy, goal_features = self._predict_goal_position(processed_obs)
+                    modality_features.append(goal_features)
+                    modality_masks.append(1.0)
+                    
+                    # 存储预测的目标位置供训练时使用
+                    self._last_predicted_goal = pred_xy
+                except Exception as e:
+                    print(f"[警告] 目标预测失败: {e}, 使用零向量")
+                    modality_features.append(torch.zeros(batch_size, goal_feat_dim, device=device))
+                    modality_masks.append(0.0)
+            else:
+                modality_features.append(torch.zeros(batch_size, goal_feat_dim, device=device))
+                modality_masks.append(0.0)
+        elif 'pointgoal' in processed_obs:
+            # 退回到PointNav数据
             pointgoal_features = processed_obs['pointgoal']
             if len(pointgoal_features.shape) == 1:
                 pointgoal_features = pointgoal_features.unsqueeze(0)
-            features.append(pointgoal_features)
-        
-        # 融合所有特征
-        if features:
-            combined_features = torch.cat(features, dim=1)
-            encoded_features = self.feature_fusion(combined_features)
-        else:
-            # 如果没有特征，创建零向量
-            if isinstance(processed_obs, dict) and processed_obs:
-                batch_size = next(iter(processed_obs.values())).shape[0]
-                device = next(iter(processed_obs.values())).device
+            # 投影到goal_feat_dim维度
+            if goal_feat_dim > 0:
+                pointgoal_proj = nn.Linear(pointgoal_features.shape[-1], goal_feat_dim).to(device)
+                goal_features = pointgoal_proj(pointgoal_features)
+                modality_features.append(goal_features)
+                modality_masks.append(1.0)
             else:
-                batch_size = 1
-                device = torch.device('cpu')
-            encoded_features = torch.zeros(batch_size, self.obs_dim, device=device)
+                modality_features.append(torch.zeros(batch_size, self.hidden_size, device=device))
+                modality_masks.append(0.0)
+        else:
+            pad_dim = goal_feat_dim if goal_feat_dim > 0 else self.hidden_size
+            modality_features.append(torch.zeros(batch_size, pad_dim, device=device))
+            modality_masks.append(0.0)
+        
+        # 拼接所有模态特征
+        combined_features = torch.cat(modality_features, dim=1)  # [B, fusion_input_dim]
+        
+        # 计算自适应注意力权重（处理不确定性）
+        attention_weights = self.modality_attention(combined_features)  # [B, num_modalities]
+        modality_masks_tensor = torch.tensor(modality_masks, device=device).unsqueeze(0)  # [1, num_modalities]
+        
+        # 应用mask：不可用的模态权重设为0
+        attention_weights = attention_weights * modality_masks_tensor
+        attention_weights = attention_weights / (attention_weights.sum(dim=-1, keepdim=True) + 1e-8)
+        
+        # 通过融合网络
+        encoded_features = self.feature_fusion(combined_features)  # [B, obs_dim]
+        
+        # 存储注意力权重供分析
+        self._last_attention_weights = attention_weights
+        
+        # ==================== 序列建模增强（新增）====================
+        # 如果启用Transformer序列编码器，处理观察历史
+        if self.use_transformer_encoder and hasattr(self, 'sequence_encoder'):
+            # 检查是否有历史观察序列
+            # 如果输入已经是序列 [B, T, obs_dim]，直接使用
+            # 否则，将当前特征扩展为序列 [B, 1, obs_dim]
+            
+            if len(encoded_features.shape) == 3:
+                # 已经是序列格式 [B, T, obs_dim]
+                obs_sequence = encoded_features
+            else:
+                # 单帧观察，扩展为序列 [B, 1, obs_dim]
+                obs_sequence = encoded_features.unsqueeze(1)
+            
+            # 应用位置编码
+            obs_sequence = self.positional_encoding(obs_sequence)  # [B, T, obs_dim]
+            
+            # 使用Transformer编码器处理序列
+            # 这里使用self-attention捕获时序依赖关系
+            sequence_encoding = self.sequence_encoder(obs_sequence)  # [B, T, obs_dim]
+            
+            # 聚合序列特征：使用平均池化（参考flodiff）
+            # 这样可以同时考虑所有历史帧的信息
+            encoded_features = torch.mean(sequence_encoding, dim=1)  # [B, obs_dim]
+            
+            # 存储序列编码供分析
+            self._last_sequence_encoding = sequence_encoding
         
         return encoded_features
     
-    def _predict_goal_position(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _extract_keypoint_features(
+        self, 
+        occ_map: torch.Tensor,
+        device: str = 'cuda'
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        从手绘地图预测目标位置
+        从占用栅格地图提取关键点特征
+        
+        参数:
+            occ_map: 占用栅格地图 [H, W]
+            device: 设备
+            
+        返回:
+            keypoints: 关键点坐标 [K, 2]
+            features: 关键点射线特征 [K, n_rays+2]
         """
-        # 这里简化实现，实际应该使用AdvancedGoalPredictor的完整逻辑
-        # 返回目标预测的极坐标表示
+        from ..models.advanced_goal_predictor import (
+            generate_explore_keypoints,
+            ray_features_pytorch
+        )
+        
+        # 生成关键点
+        keypoints = generate_explore_keypoints(
+            occ_map,
+            k_rows=self.goal_predictor_k_rows,
+            k_cols=self.goal_predictor_k_cols,
+            use_gpu=True,
+            device=device
+        )  # [K, 2] (x, y)
+        
+        # 计算射线角度
+        angles = [2 * np.pi * i / self.goal_predictor_n_rays 
+                 for i in range(self.goal_predictor_n_rays)]
+        
+        # 提取射线特征
+        ray_feats = ray_features_pytorch(
+            occ_map, 
+            keypoints, 
+            angles, 
+            max_dist=100.0,
+            device=device
+        )  # [K, n_rays]
+        
+        # 归一化关键点坐标到[0, 1]
+        H, W = occ_map.shape
+        keypoints_normalized = keypoints.clone()
+        keypoints_normalized[:, 0] = keypoints[:, 0] / W  # x坐标
+        keypoints_normalized[:, 1] = keypoints[:, 1] / H  # y坐标
+        
+        # 拼接射线特征和坐标
+        features = torch.cat([ray_feats, keypoints_normalized], dim=-1)  # [K, n_rays+2]
+        
+        return keypoints, features
+    
+    def _predict_goal_position(self, observations: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        从手绘地图和SLAM地图预测目标位置
+        
+        使用AdvancedGoalPredictor的完整流程：
+        1. 从SLAM和手绘地图提取占用栅格
+        2. 在两个地图上生成关键点并提取射线特征
+        3. 使用Transformer交叉注意力融合两个地图的信息
+        4. 预测目标位置
+        
+        参数:
+            observations: 观察字典，包含SLAM和手绘地图
+            
+        返回:
+            pred_xy: 预测的目标位置 [batch_size, 2]
+            goal_features: 目标特征向量 [batch_size, 128]
+        """
+        from ..models.advanced_goal_predictor import (
+            extract_occupancy_grid,
+            extract_sketch_occupancy_grid,
+            extract_goal_coordinates
+        )
+        
         batch_size = observations[self.goal_sensor_uuid].shape[0]
         device = observations[self.goal_sensor_uuid].device
         
-        # 简化的目标预测：返回零向量作为占位符
-        # 实际实现应该使用AdvancedGoalPredictor的完整逻辑
-        goal_features = torch.zeros(batch_size, 2, device=device)  # [distance, angle]
-        return goal_features
+        # 确保批次中的所有样本都在同一设备上
+        slam_map = observations['slam'].to(device) if 'slam' in observations else None
+        sketch_map = observations[self.goal_sensor_uuid].to(device)
+        
+        # 处理批次中的每个样本
+        pred_xys = []
+        goal_features_list = []
+        
+        for b in range(batch_size):
+            # 提取当前样本的地图
+            sketch_rgb_b = sketch_map[b]  # [H, W, 3]
+            
+            # 如果有SLAM地图，使用它；否则使用手绘地图的占用栅格
+            if slam_map is not None:
+                slam_rgb_b = slam_map[b]  # [H, W, 3]
+                explore_occ = extract_occupancy_grid(slam_rgb_b, use_gpu=True, device=device)
+            else:
+                # 如果没有SLAM，也从手绘地图提取一个占用栅格作为探索地图
+                explore_occ = extract_sketch_occupancy_grid(sketch_rgb_b, use_gpu=True, device=device)
+            
+            sketch_occ = extract_sketch_occupancy_grid(sketch_rgb_b, use_gpu=True, device=device)
+            
+            # 提取目标坐标（用于监督学习或辅助预测）
+            goal_coords = extract_goal_coordinates(sketch_rgb_b, use_gpu=True, device=device)
+            
+            # 从两个地图提取关键点特征
+            explore_keypoints, explore_features = self._extract_keypoint_features(explore_occ, device)
+            sketch_keypoints, sketch_features = self._extract_keypoint_features(sketch_occ, device)
+            
+            # 添加批次维度 [1, K, in_dim]
+            explore_features = explore_features.unsqueeze(0)
+            sketch_features = sketch_features.unsqueeze(0)
+            keypoints_xy = explore_keypoints.unsqueeze(0)  # 使用explore地图的关键点坐标
+            
+            # 使用AdvancedGoalPredictor预测目标位置
+            pred_xy, weights = self.goal_predictor(
+                explore_features,
+                sketch_features,
+                keypoints_xy,
+                goal_coords=goal_coords
+            )  # pred_xy: [1, 2], weights: [1, K]
+            
+            pred_xys.append(pred_xy)
+            
+            # 将预测的目标位置投影到特征空间
+            goal_feat = self.goal_feature_proj(pred_xy)  # [1, 128]
+            goal_features_list.append(goal_feat)
+        
+        # 合并批次
+        pred_xys = torch.cat(pred_xys, dim=0)  # [B, 2]
+        goal_features = torch.cat(goal_features_list, dim=0)  # [B, 128]
+        
+        return pred_xys, goal_features
     
     def conditional_sample(
         self,
